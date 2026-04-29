@@ -1,0 +1,204 @@
+<script>
+  var allTasks = [];
+  var lastSyncTimestamp = "";
+  var isSyncing = false;
+  var editingTaskId = null;
+  var POLL_INTERVAL = 5000;
+
+  window.onload = function () {
+    loadTasks();
+    setInterval(pollForUpdates, POLL_INTERVAL);
+  };
+
+  function loadTasks() {
+    setSyncStatus("⏳ Syncing...");
+    google.script.run
+      .withSuccessHandler(function (tasks) {
+        allTasks = tasks;
+        renderBoard(tasks);
+        setSyncStatus("✅ Live");
+      })
+      .withFailureHandler(function () {
+        setSyncStatus("❌ Error");
+        showToast("Failed to load tasks", "error");
+      })
+      .getTasks();
+  }
+
+  function pollForUpdates() {
+    if (isSyncing) return;
+    isSyncing = true;
+    google.script.run
+      .withSuccessHandler(function (latest) {
+        isSyncing = false;
+        if (latest !== lastSyncTimestamp) {
+          lastSyncTimestamp = latest;
+          loadTasks();
+        }
+      })
+      .withFailureHandler(function () {
+        isSyncing = false;
+      })
+      .getLastUpdated();
+  }
+
+  function renderBoard(tasks) {
+    var columns = {
+      "Backlog": document.getElementById("list-backlog"),
+      "In-Progress": document.getElementById("list-progress"),
+      "Done": document.getElementById("list-done")
+    };
+
+    Object.values(columns).forEach(function (col) { col.innerHTML = ""; });
+
+    tasks.forEach(function (task) {
+      var col = columns[task.status];
+      if (!col) return;
+      col.appendChild(createCard(task));
+    });
+
+    Object.keys(columns).forEach(function (status) {
+      var col = columns[status];
+      if (col.children.length === 0) {
+        col.innerHTML = '<div class="empty-col">No tasks here</div>';
+      }
+    });
+
+    updateCounts(tasks);
+
+    // ❌ DISABLED SORTABLE (important)
+    // initSortable();
+  }
+
+  function createCard(task) {
+    var div = document.createElement("div");
+    div.className = "task-card";
+    div.setAttribute("data-id", task.id);
+    div.innerHTML =
+      '<div class="task-title">' + escapeHtml(task.title) + '</div>' +
+      '<div class="task-desc">' + escapeHtml(task.description || "") + '</div>' +
+      '<div class="task-footer">' +
+        '<button class="btn btn-edit" onclick="openEditModal(\'' + task.id + '\')">✏️ Edit</button>' +
+        '<button class="btn btn-danger" onclick="removeTask(\'' + task.id + '\')">🗑️ Delete</button>' +
+      '</div>';
+    return div;
+  }
+
+  // ❌ DISABLED SORTABLE FUNCTION
+  function initSortable() {
+    return;
+  }
+
+  function updateCounts(tasks) {
+    var counts = { "Backlog": 0, "In-Progress": 0, "Done": 0 };
+    tasks.forEach(function (t) {
+      if (counts[t.status] !== undefined) counts[t.status]++;
+    });
+    document.getElementById("count-backlog").textContent = counts["Backlog"];
+    document.getElementById("count-progress").textContent = counts["In-Progress"];
+    document.getElementById("count-done").textContent = counts["Done"];
+  }
+
+  function addTask() {
+    var title = document.getElementById("new-title").value.trim();
+    var desc = document.getElementById("new-desc").value.trim();
+
+    if (!title) { showToast("Please enter a task title", "error"); return; }
+
+    setSyncStatus("⏳ Adding...");
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (res.success) {
+          document.getElementById("new-title").value = "";
+          document.getElementById("new-desc").value = "";
+          showToast("Task added!", "success");
+          lastSyncTimestamp = "";
+          loadTasks();
+        } else {
+          showToast("Failed: " + res.error, "error");
+        }
+      })
+      .withFailureHandler(function () {
+        showToast("Connection error", "error");
+      })
+      .addTask(title, desc);
+  }
+
+  function removeTask(taskId) {
+    if (!confirm("Delete this task?")) return;
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (res.success) {
+          showToast("Task deleted", "success");
+          lastSyncTimestamp = "";
+          loadTasks();
+        }
+      })
+      .withFailureHandler(function () {
+        showToast("Connection error", "error");
+      })
+      .deleteTask(taskId);
+  }
+
+  function openEditModal(taskId) {
+    editingTaskId = taskId;
+    var task = allTasks.find(function (t) { return t.id === taskId; });
+    if (!task) return;
+    document.getElementById("edit-title").value = task.title;
+    document.getElementById("edit-desc").value = task.description || "";
+    document.getElementById("edit-modal").classList.add("active");
+  }
+
+  function closeEditModal() {
+    document.getElementById("edit-modal").classList.remove("active");
+    editingTaskId = null;
+  }
+
+  function saveEdit() {
+    var title = document.getElementById("edit-title").value.trim();
+    var desc = document.getElementById("edit-desc").value.trim();
+
+    if (!title) { showToast("Title cannot be empty", "error"); return; }
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (res.success) {
+          closeEditModal();
+          showToast("Task updated!", "success");
+          lastSyncTimestamp = "";
+          loadTasks();
+        } else {
+          showToast("Failed: " + res.error, "error");
+        }
+      })
+      .withFailureHandler(function () {
+        showToast("Connection error", "error");
+      })
+      .editTask(editingTaskId, title, desc);
+  }
+
+  function setSyncStatus(msg) {
+    document.getElementById("sync-status").textContent = msg;
+  }
+
+  function showToast(msg, type) {
+    var toast = document.getElementById("toast");
+    toast.textContent = msg;
+    toast.className = "toast " + (type || "") + " show";
+    setTimeout(function () { toast.className = "toast"; }, 3000);
+  }
+
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && document.activeElement.id === "new-title") {
+      addTask();
+    }
+  });
+</script>
