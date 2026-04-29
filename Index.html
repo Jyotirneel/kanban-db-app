@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Kanban Board</title>
+  <?!= include("Stylesheet"); ?>
+</head>
+<body>
+
+  <header>
+    <h1>🗂️ Kanban Board</h1>
+    <span class="sync-status" id="sync-status">⏳ Loading...</span>
+  </header>
+
+  <div class="add-task-bar">
+    <input type="text" id="new-title" placeholder="Task title..." />
+    <input type="text" id="new-desc" placeholder="Description (optional)..." />
+    <button class="btn btn-primary" onclick="addTask()">+ Add Task</button>
+  </div>
+
+  <div class="board">
+
+    <div class="column col-backlog">
+      <div class="column-header">
+        <span class="column-title">
+          <span class="col-dot"></span> Backlog
+        </span>
+        <span class="task-count" id="count-backlog">0</span>
+      </div>
+      <div class="task-list" id="list-backlog">
+        <div class="loading">Loading...</div>
+      </div>
+    </div>
+
+    <div class="column col-progress">
+      <div class="column-header">
+        <span class="column-title">
+          <span class="col-dot"></span> In-Progress
+        </span>
+        <span class="task-count" id="count-progress">0</span>
+      </div>
+      <div class="task-list" id="list-progress">
+        <div class="loading">Loading...</div>
+      </div>
+    </div>
+
+    <div class="column col-done">
+      <div class="column-header">
+        <span class="column-title">
+          <span class="col-dot"></span> Done
+        </span>
+        <span class="task-count" id="count-done">0</span>
+      </div>
+      <div class="task-list" id="list-done">
+        <div class="loading">Loading...</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="modal-overlay" id="edit-modal">
+    <div class="modal">
+      <h2>✏️ Edit Task</h2>
+      <input type="text" id="edit-title" placeholder="Task title" />
+      <textarea id="edit-desc" placeholder="Description"></textarea>
+      <div class="modal-actions">
+        <button class="btn btn-cancel" onclick="closeEditModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveEdit()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+ 
+  <?!= include("Javascript"); ?>
+ 
+
+</body>
+</html>
